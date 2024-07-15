@@ -23,12 +23,14 @@ import os
 import time
 
 import presets
+import schedulefree
 import torch
 import torch.utils.data
 import utils
 from coco_utils import get_coco
 from engine import evaluate, train_one_epoch
 from group_by_aspect_ratio import GroupedBatchSampler, create_aspect_ratio_groups
+from torch.optim.lr_scheduler import LRScheduler
 from transforms import SimpleCopyPaste
 
 import torchvision
@@ -126,7 +128,9 @@ def get_args_parser(add_help=True):
         metavar="N",
         help="number of data loading workers (default: 4)",
     )
-    parser.add_argument("--opt", default="sgd", type=str, help="optimizer")
+    parser.add_argument(
+        "--opt", default="adamwschedulefree", type=str, help="optimizer"
+    )
     parser.add_argument(
         "--lr",
         default=0.02,
@@ -265,6 +269,15 @@ def get_args_parser(add_help=True):
     return parser
 
 
+# dummy lr scheduler for schedule-free optimizer
+class DummyLR(LRScheduler):
+    def __init__(self, optimizer):
+        super(DummyLR, self).__init__(optimizer)
+
+    def get_lr(self):
+        return [group["lr"] for group in self.optimizer.param_groups]
+
+
 def main(args):
     if args.backend.lower() == "tv_tensor" and not args.use_v2:
         raise ValueError("Use --use-v2 if you want to use the tv_tensor backend.")
@@ -385,6 +398,10 @@ def main(args):
         optimizer = torch.optim.AdamW(
             parameters, lr=args.lr, weight_decay=args.weight_decay
         )
+    elif opt_name == "adamwschedulefree":
+        optimizer = schedulefree.AdamWScheduleFree(
+            parameters, lr=args.lr, weight_decay=args.weight_decay
+        )
     else:
         raise RuntimeError(
             f"Invalid optimizer {args.opt}. Only SGD and AdamW are supported."
@@ -393,7 +410,9 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
 
     args.lr_scheduler = args.lr_scheduler.lower()
-    if args.lr_scheduler == "multisteplr":
+    if opt_name == "adamwschedulefree":
+        lr_scheduler = DummyLR(optimizer)
+    elif args.lr_scheduler == "multisteplr":
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=args.lr_steps, gamma=args.lr_gamma
         )
@@ -439,9 +458,9 @@ def main(args):
             }
             if args.amp:
                 checkpoint["scaler"] = scaler.state_dict()
-            utils.save_on_master(
-                checkpoint, os.path.join(args.output_dir, f"model_{epoch}.pth")
-            )
+            # utils.save_on_master(
+            #     checkpoint, os.path.join(args.output_dir, f"model_{epoch}.pth")
+            # )
             utils.save_on_master(
                 checkpoint, os.path.join(args.output_dir, "checkpoint.pth")
             )
