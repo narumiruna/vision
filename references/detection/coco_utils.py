@@ -203,8 +203,8 @@ def get_coco(
 ):
     PATHS = {
         "train": (
-            "test",
-            "test/_annotations.coco.json",
+            "train",
+            "train/_annotations.coco.json",
         ),
         "val": (
             "valid",
