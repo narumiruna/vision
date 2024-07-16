@@ -206,12 +206,12 @@ def get_coco(
 ):
     PATHS = {
         "train": (
-            "train",
-            "train/_annotations.coco.json",
+            "WIDER_train/images",
+            "wider_face_train_annot_coco_style.json",
         ),
         "val": (
-            "valid",
-            "valid/_annotations.coco.json",
+            "WIDER_val/images",
+            "wider_face_val_annot_coco_style.json",
         ),
         # "train": ("val2017", os.path.join("annotations", anno_file_template.format(mode, "val")))
     }
